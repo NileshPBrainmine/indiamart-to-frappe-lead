@@ -1,0 +1,9 @@
+services:
+  indiamart-frappe:
+    build: .
+    container_name: indiamart-frappe
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs

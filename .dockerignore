@@ -1,0 +1,9 @@
+.git
+.DS_Store
+__pycache__
+*.pyc
+*.pyo
+logs/
+.env
+project_context.md
+README.md
