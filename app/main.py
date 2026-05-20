@@ -18,7 +18,7 @@ def main():
     start_worker()
 
     run()  # fetch immediately on startup
-    schedule.every(5).minutes.do(run)
+    schedule.every(6).minutes.do(run)
 
     def shutdown(signum, frame):
         logger.info("Shutdown signal received. Stopping...")
