@@ -11,14 +11,16 @@ def fetch_leads():
     start_time = (now - timedelta(minutes=5)).strftime("%d-%m-%Y %H:%M:%S")
     end_time = now.strftime("%d-%m-%Y %H:%M:%S")
 
-    params = {
-        "glusr_crm_key": INDIAMART_KEY,
-        "start_time": start_time,
-        "end_time": end_time,
-    }
+    # Build URL manually — requests encodes colons as %3A which IndiaMart rejects
+    url = (
+        f"{INDIAMART_API}"
+        f"?glusr_crm_key={INDIAMART_KEY}"
+        f"&start_time={start_time.replace(' ', '%20')}"
+        f"&end_time={end_time.replace(' ', '%20')}"
+    )
 
     try:
-        response = requests.get(INDIAMART_API, params=params, timeout=30)
+        response = requests.get(url, timeout=30)
         if response.status_code == 429:
             logger.warning("IndiaMart rate limit hit (429). Skipping this cycle.")
             return []

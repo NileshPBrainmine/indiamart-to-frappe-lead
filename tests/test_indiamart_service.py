@@ -28,6 +28,10 @@ def _mock_response(json_data, status_code=200):
     return resp
 
 
+def _called_url(mock_get):
+    return mock_get.call_args[0][0]
+
+
 class TestFetchLeads:
 
     @patch("app.indiamart_service.requests.get")
@@ -37,8 +41,7 @@ class TestFetchLeads:
 
     @patch("app.indiamart_service.requests.get")
     def test_returns_multiple_leads(self, mock_get):
-        leads = SAMPLE_LEADS * 3
-        mock_get.return_value = _mock_response({"RESPONSE": leads})
+        mock_get.return_value = _mock_response({"RESPONSE": SAMPLE_LEADS * 3})
         assert len(fetch_leads()) == 3
 
     @patch("app.indiamart_service.requests.get")
@@ -57,13 +60,13 @@ class TestFetchLeads:
         assert fetch_leads() == []
 
     @patch("app.indiamart_service.requests.get")
-    def test_returns_empty_on_500_error(self, mock_get):
-        mock_get.return_value = _mock_response({}, status_code=500)
+    def test_returns_empty_on_http_429(self, mock_get):
+        mock_get.return_value = _mock_response({}, status_code=429)
         assert fetch_leads() == []
 
     @patch("app.indiamart_service.requests.get")
-    def test_returns_empty_on_401_unauthorized(self, mock_get):
-        mock_get.return_value = _mock_response({}, status_code=401)
+    def test_returns_empty_on_500_error(self, mock_get):
+        mock_get.return_value = _mock_response({}, status_code=500)
         assert fetch_leads() == []
 
     @patch("app.indiamart_service.requests.get")
@@ -77,28 +80,45 @@ class TestFetchLeads:
         assert fetch_leads() == []
 
     @patch("app.indiamart_service.requests.get")
-    def test_sends_api_key_in_params(self, mock_get):
+    def test_api_key_is_in_url(self, mock_get):
         mock_get.return_value = _mock_response({"RESPONSE": []})
         with patch("app.indiamart_service.INDIAMART_KEY", "MY_KEY"):
             fetch_leads()
-        params = mock_get.call_args[1]["params"]
-        assert params["glusr_crm_key"] == "MY_KEY"
+        assert "glusr_crm_key=MY_KEY" in _called_url(mock_get)
 
     @patch("app.indiamart_service.requests.get")
-    def test_time_params_are_in_correct_format(self, mock_get):
+    def test_time_params_are_in_url(self, mock_get):
         mock_get.return_value = _mock_response({"RESPONSE": []})
         fetch_leads()
-        params = mock_get.call_args[1]["params"]
-        fmt = r"^\d{2}-\d{2}-\d{4} \d{2}:\d{2}:\d{2}$"
-        assert re.match(fmt, params["start_time"])
-        assert re.match(fmt, params["end_time"])
+        url = _called_url(mock_get)
+        assert "start_time=" in url
+        assert "end_time=" in url
+
+    @patch("app.indiamart_service.requests.get")
+    def test_url_contains_no_encoded_colons(self, mock_get):
+        # IndiaMart rejects %3A — colons must be sent raw
+        mock_get.return_value = _mock_response({"RESPONSE": []})
+        fetch_leads()
+        assert "%3A" not in _called_url(mock_get)
+        assert "%3a" not in _called_url(mock_get)
+
+    @patch("app.indiamart_service.requests.get")
+    def test_time_format_is_dd_mm_yyyy_hh_mm_ss(self, mock_get):
+        mock_get.return_value = _mock_response({"RESPONSE": []})
+        fetch_leads()
+        url = _called_url(mock_get)
+        # e.g. start_time=20-05-2026%2010:30:00
+        fmt = r"start_time=\d{2}-\d{2}-\d{4}(?:%20| )\d{2}:\d{2}:\d{2}"
+        assert re.search(fmt, url), f"Time format wrong in URL: {url}"
 
     @patch("app.indiamart_service.requests.get")
     def test_end_time_is_after_start_time(self, mock_get):
         mock_get.return_value = _mock_response({"RESPONSE": []})
         fetch_leads()
-        params = mock_get.call_args[1]["params"]
-        assert params["end_time"] > params["start_time"]
+        url = _called_url(mock_get)
+        start = re.search(r"start_time=([^&]+)", url).group(1).replace("%20", " ")
+        end   = re.search(r"end_time=([^&]+)", url).group(1).replace("%20", " ")
+        assert end > start
 
     @patch("app.indiamart_service.requests.get")
     def test_uses_30_second_timeout(self, mock_get):
